@@ -31,10 +31,11 @@ class Users(Base):
     tguser_id = sq.Column(sq.Integer, nullable=False, unique=True)
 
 class Words(Base):
-    __tablename__ = 'words'
+    __tablename__ = 'words'    
     id = sq.Column(sq.Integer, primary_key=True)
     word = sq.Column(sq.String, nullable=False, unique=True)
     translate = sq.Column(sq.String, nullable=False)
+    
 
 class TgUserWord(Base):
     __tablename__ = 'user_words'
@@ -69,13 +70,23 @@ def import_words(session, filename='words.txt', echo=False):
         else:
             print('No errors')
 
+def export_to_json(session, filename='words.json'):
+    query = sq.select(Words.word, Words.translate).select_from(Words)
+    with open(filename, 'w') as f:
+        f.write(json.dumps([{'word': row.word, 'translate': row.translate} for row in session.execute(query).all()],
+                           ensure_ascii=False, indent=4))
+
 def get_users(session):
     return [user.tguser_id for user in session.query(Users).all()]
 
-def add_user(session, tguser_id):
+def add_new_user(session, tguser_id):
     if session.query(Users).filter_by(tguser_id=tguser_id).first():
-        return
+         return
     session.add(Users(tguser_id=tguser_id))
+    user_id = session.query(Users).filter_by(tguser_id=tguser_id).first().id
+    for word in session.query(Words).all():
+        # print(word.id, word.word, word.translate)
+        session.add(TgUserWord(user_id=user_id, word_id=word.id))
     session.commit()
 
 if __name__ == '__main__':
@@ -86,5 +97,6 @@ if __name__ == '__main__':
     session = Session()
     
     # import_words(session, echo=True)
-    # print([word.word for word in session.query(Words).all()])
-    print(get_users(session))
+    # export_to_json(session)
+    # print(get_users(session))
+    # add_new_user(session, 1782742233)

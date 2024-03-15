@@ -24,17 +24,6 @@ userStep = {}
 buttons = []
 
 print(known_users)
-
-@bot.message_handler(commands=['addme'])
-def addme(message):
-    cid = message.chat.id
-    if cid not in known_users:
-        xftgdb.add_user(session, cid)
-        known_users.append(cid)
-        userStep[cid] = 0
-        bot.send_message(cid, f"Hello, {message.from_user.username}, I'll remember you!")
-    else:
-        bot.send_message(cid, f"Hello, {message.from_user.username}, I already know you!")
     
 class MyStates(StatesGroup):
     target_word = State()
@@ -59,6 +48,16 @@ class Command:
     DELETE_WORD = 'Удалить слово🔙'
     NEXT = 'Дальше ⏭'
 
+@bot.message_handler(commands=['start'])
+def addme(message):
+    cid = message.chat.id
+    if cid not in known_users:
+        xftgdb.add_user(session, cid)
+        known_users.append(cid)
+        userStep[cid] = 0
+        bot.send_message(cid, f"Hello, new user {message.from_user.username}, let study English...")
+    else:
+        bot.send_message(cid, f"Hello, {message.from_user.username}, I already know you!")
 
 bot.add_custom_filter(custom_filters.StateFilter(bot))
 

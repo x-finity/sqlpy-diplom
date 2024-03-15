@@ -1,0 +1,42 @@
+[
+    {
+        "word": "собака",
+        "translate": "dog"
+    },
+    {
+        "word": "пользователь",
+        "translate": "user"
+    },
+    {
+        "word": "шкаф",
+        "translate": "wardrobe"
+    },
+    {
+        "word": "вилка",
+        "translate": "fork"
+    },
+    {
+        "word": "стол",
+        "translate": "table"
+    },
+    {
+        "word": "номер",
+        "translate": "number"
+    },
+    {
+        "word": "телефон",
+        "translate": "telephone"
+    },
+    {
+        "word": "зеленый",
+        "translate": "green"
+    },
+    {
+        "word": "она",
+        "translate": "she"
+    },
+    {
+        "word": "мир",
+        "translate": "world"
+    }
+]
