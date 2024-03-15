@@ -1,6 +1,7 @@
 import sqlalchemy as sq
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 import json
+import re
 from xf_ya import translate_word
 
 Base = declarative_base()
@@ -11,6 +12,9 @@ def load_config(filename):
 
 config = load_config('config.json')
 ya_token = config['yandex_token']
+
+# def translate(word, ya_token=ya_token):
+#     return translate_word(word, ya_token)
 
 def dsn(config):
     db_config = config['database']
@@ -89,6 +93,44 @@ def add_new_user(session, tguser_id):
         session.add(TgUserWord(user_id=user_id, word_id=word.id))
     session.commit()
 
+def get_random_word(session, tguser_id):
+    # q = sq.select(Words).order_by(sq.func.random()).limit(1)
+    # q = sq.select(TgUserWord).join(Words, TgUserWord.word_id == Words.id).order_by(sq.func.random()).limit(1)
+    q = sq.select(Words.word, Words.translate).join(TgUserWord, Words.id == TgUserWord.word_id).join(Users, TgUserWord.user_id == Users.id) \
+        .filter(Users.tguser_id == tguser_id).order_by(sq.func.random()).limit(1)
+    for word in session.execute(q).all():
+        return word
+
+def get_other_words(session, tguser_id, except_word):
+    q = sq.select(Words.translate).join(TgUserWord, Words.id == TgUserWord.word_id).join(Users, TgUserWord.user_id == Users.id) \
+        .filter(Users.tguser_id == tguser_id).filter(Words.translate != except_word).order_by(sq.func.random()).limit(3)
+    other_words = []
+    for word in session.execute(q).all():
+        other_words.append(word.translate)
+    return other_words
+
+def delete_word(session, tguser_id, word):
+    session.query(TgUserWord).filter(TgUserWord.user_id == session.query(Users).filter_by(tguser_id=tguser_id).first().id). \
+        filter(TgUserWord.word_id == session.query(Words).filter_by(word=word).first().id).delete()
+    session.commit()
+
+def add_new_word(session, tguser_id, word, translate):
+    if session.query(Words).filter_by(word=word).first():
+        return 1
+    session.add(Words(word=word, translate=translate))
+    session.add(TgUserWord(user_id=session.query(Users).filter_by(tguser_id=tguser_id).first().id, word_id=session.query(Words).filter_by(word=word).first().id))
+    session.commit()
+
+def is_cyrillic(word):
+    if re.match('^[а-яА-Я]*$', word):
+        return True
+    return False
+
+def is_english(word):
+    if re.match('^[a-zA-Z]*$', word):
+        return True
+    return False
+
 if __name__ == '__main__':
     DSN = dsn(config)
     engine = sq.create_engine(DSN)
@@ -100,3 +142,7 @@ if __name__ == '__main__':
     # export_to_json(session)
     # print(get_users(session))
     # add_new_user(session, 1782742233)
+    # word_tuple = get_random_word(session, 1782742233)
+    # print(word_tuple, get_other_words(session, 1782742233, word_tuple[0]))
+    # delete_word(session, 1782742233, 'собака')
+    print(if_cyrillic('привет'))

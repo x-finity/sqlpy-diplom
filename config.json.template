@@ -1,0 +1,9 @@
+{
+    "bot_token": "",
+    "database" : {
+        "user" : "",
+        "database" : "",
+        "password" : ""
+    },
+    "yandex_token" : ""
+}

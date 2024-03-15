@@ -13,6 +13,8 @@ xftgdb.create_db(engine)
 Session = xftgdb.sessionmaker(bind=engine)
 session = Session()
 
+xftgdb.import_words(session)
+
 print('Start telegram bot...')
 
 state_storage = StateMemoryStorage()
@@ -23,7 +25,7 @@ known_users = xftgdb.get_users(session)
 userStep = {}
 buttons = []
 
-print(known_users)
+# print()
     
 class MyStates(StatesGroup):
     target_word = State()
@@ -47,50 +49,45 @@ class Command:
     ADD_WORD = 'Добавить слово ➕'
     DELETE_WORD = 'Удалить слово🔙'
     NEXT = 'Дальше ⏭'
-
-@bot.message_handler(commands=['start'])
-def addme(message):
-    cid = message.chat.id
-    if cid not in known_users:
-        xftgdb.add_user(session, cid)
-        known_users.append(cid)
-        userStep[cid] = 0
-        bot.send_message(cid, f"Hello, new user {message.from_user.username}, let study English...")
-    else:
-        bot.send_message(cid, f"Hello, {message.from_user.username}, I already know you!")
-
-bot.add_custom_filter(custom_filters.StateFilter(bot))
-
-bot.infinity_polling(skip_pending=True)
-
-'''
+    CANCEL = 'Отмена ❌'
+    YES = 'Да ✅'
 
 def show_hint(*lines):
     return '\n'.join(lines)
 
-@bot.message_handler(commands=['cards', 'start'])
-def create_cards(message):
+@bot.message_handler(commands=['start'])
+def create_cards(message, step=0):
     cid = message.chat.id
     if cid not in known_users:
+        xftgdb.add_new_user(session, cid)
         known_users.append(cid)
         userStep[cid] = 0
-        bot.send_message(cid, "Hello, stranger, let study English...")
+        bot.send_message(cid, f"Hello, new user {message.from_user.username}, let study English...")
+    else:
+        if step == 0: bot.send_message(cid, f"Hello, {message.from_user.username}, I already know you!")
     markup = types.ReplyKeyboardMarkup(row_width=2)
 
     global buttons
     buttons = []
-    target_word = 'Peace'  # брать из БД
-    translate = 'Мир'  # брать из БД
+    word_tuple = xftgdb.get_random_word(session, cid)
+    if not word_tuple:
+        markup.add(types.KeyboardButton(Command.ADD_WORD))
+        bot.send_message(cid, "В базе нет слов для изучения, хочешь добавить новое слово?", reply_markup=markup)
+        return
+    target_word = word_tuple[1]
+    translate = word_tuple[0]
+
     target_word_btn = types.KeyboardButton(target_word)
     buttons.append(target_word_btn)
-    others = ['Green', 'White', 'Hello']  # брать из БД
+    others = xftgdb.get_other_words(session, cid, target_word)
+    # others = ['Green', 'White', 'Hello']  # брать из БД
     other_words_btns = [types.KeyboardButton(word) for word in others]
     buttons.extend(other_words_btns)
     random.shuffle(buttons)
     next_btn = types.KeyboardButton(Command.NEXT)
     add_word_btn = types.KeyboardButton(Command.ADD_WORD)
     delete_word_btn = types.KeyboardButton(Command.DELETE_WORD)
-    buttons.extend([next_btn, add_word_btn, delete_word_btn])
+    buttons.extend([add_word_btn, delete_word_btn, next_btn])
 
     markup.add(*buttons)
 
@@ -105,20 +102,66 @@ def create_cards(message):
 
 @bot.message_handler(func=lambda message: message.text == Command.NEXT)
 def next_cards(message):
-    create_cards(message)
-
+    create_cards(message, 1)
 
 @bot.message_handler(func=lambda message: message.text == Command.DELETE_WORD)
 def delete_word(message):
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        print(data['target_word'])  # удалить из БД
-
+        xftgdb.delete_word(session, message.from_user.id, data['translate_word'])
+        bot.send_message(message.chat.id, f"Слово {data['translate_word']} удалено")
+        print(f'Слово {data["target_word"]} удалено у {message.from_user.id}')  # удалить из БД
+    create_cards(message, step=1)
 
 @bot.message_handler(func=lambda message: message.text == Command.ADD_WORD)
 def add_word(message):
     cid = message.chat.id
     userStep[cid] = 1
-    print(message.text)  # сохранить в БД
+    markup = types.ReplyKeyboardMarkup(row_width=1)
+    markup.add(types.KeyboardButton(Command.CANCEL))
+    bot.send_message(cid, "Напиши новое слово(ru):", reply_markup=markup)
+    bot.register_next_step_handler(message, get_ru_word)
+def get_ru_word(message):
+    cid = message.chat.id
+    if message.text == Command.CANCEL:
+        create_cards(message,1)
+    elif xftgdb.is_cyrillic(message.text):
+        target_word = xftgdb.translate_word(message.text, token=xftgdb.ya_token)
+        markup = types.ReplyKeyboardMarkup(row_width=2)
+        markup.add(types.KeyboardButton(Command.YES), types.KeyboardButton(Command.CANCEL))
+        if target_word:
+            answer = f'{target_word} - правильный перевод?\nЕсли да - оставьте поле пустым\nЕсли нет - напишите перевод'
+        else:
+            answer = f'Автоперевод не работает\nВведите перевод слова {message.text} на английском'
+        bot.send_message(cid, answer, reply_markup=markup)
+        bot.register_next_step_handler(message, get_en_word, message.text, target_word)
+    else:
+        bot.send_message(message.chat.id, "Нужно написать русскими буквами")
+        bot.register_next_step_handler(message, get_ru_word)
+
+def get_en_word(message, word, target_word):
+    def send_to_add_db(message, tid, word, target_word):
+        add_word_to_db(tid, word, target_word)
+        create_cards(message, 1)
+    tid = message.from_user.id
+    if message.text == Command.CANCEL:
+        create_cards(message,1)
+    elif message.text == Command.YES:
+        send_to_add_db(message, tid, word, target_word)
+    else:
+        if xftgdb.is_english(message.text):
+            send_to_add_db(message, tid, word, message.text)
+        else:
+            bot.send_message(message.chat.id, f"Нужно написать английскими буквами\nПеревод для слова {word}:")
+            bot.register_next_step_handler(message, get_en_word, word, target_word)
+
+
+
+def add_word_to_db(tid, word, translate):
+    resp = xftgdb.add_new_word(session, tid, word, translate)
+    if resp == 1:
+        bot.send_message(tid, f"Слово {word} с переводом {translate} уже существует")
+    else:
+        bot.send_message(tid, f"Слово {word} с переводом {translate} добавлено")
 
 
 @bot.message_handler(func=lambda message: True, content_types=['text'])
@@ -130,10 +173,6 @@ def message_reply(message):
         if text == target_word:
             hint = show_target(data)
             hint_text = ["Отлично!❤", hint]
-            next_btn = types.KeyboardButton(Command.NEXT)
-            add_word_btn = types.KeyboardButton(Command.ADD_WORD)
-            delete_word_btn = types.KeyboardButton(Command.DELETE_WORD)
-            buttons.extend([next_btn, add_word_btn, delete_word_btn])
             hint = show_hint(*hint_text)
         else:
             for btn in buttons:
@@ -146,5 +185,6 @@ def message_reply(message):
     bot.send_message(message.chat.id, hint, reply_markup=markup)
 
 
+bot.add_custom_filter(custom_filters.StateFilter(bot))
 
-'''
+bot.infinity_polling(skip_pending=True)
