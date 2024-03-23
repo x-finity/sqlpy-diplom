@@ -2,6 +2,7 @@ import sqlalchemy as sq
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 import json
 import re
+import sys
 from xf_ya import translate_word
 
 Base = declarative_base()
@@ -19,15 +20,21 @@ ya_token = config['yandex_token']
 def dsn(config):
     db_config = config['database']
     db_config.setdefault('port', 5432)
-    db_config.setdefault('server', 'localhost')
-    if not db_config['port']: db_config['port'] = 5432
-    return f'postgresql://{db_config["user"]}:{db_config["password"]}@{db_config["server"]}:{db_config["port"]}/{db_config["database"]}'
+    db_config.setdefault('host', 'localhost')
+    db_config.setdefault('username', 'postgres')
+    db_config.setdefault('drivername', 'postgresql')
+    db_config.setdefault('password', '')
+    return sq.URL.create(**db_config)
+    # return f'postgresql://{db_config["user"]}:{db_config["password"]}@{db_config["server"]}:{db_config["port"]}/{db_config["database"]}'
 
 DSN = dsn(config)
 #print(DSN)
 
 def create_db(engine):
-    Base.metadata.create_all(engine)
+    try:
+        Base.metadata.create_all(engine)
+    except sq.exc.OperationalError as e:
+        sys.exit(f"Error: Cannot connect to database\n{e}")
 
 class Users(Base):
     __tablename__ = 'users'
@@ -118,7 +125,8 @@ def add_new_word(session, tguser_id, word, translate):
     if session.query(Words).filter_by(word=word).first():
         return 1
     session.add(Words(word=word, translate=translate))
-    session.add(TgUserWord(user_id=session.query(Users).filter_by(tguser_id=tguser_id).first().id, word_id=session.query(Words).filter_by(word=word).first().id))
+    session.add(TgUserWord(user_id=session.query(Users).filter_by(tguser_id=tguser_id).first().id,
+                           word_id=session.query(Words).filter_by(word=word).first().id))
     session.commit()
 
 def is_cyrillic(word):
@@ -145,4 +153,4 @@ if __name__ == '__main__':
     # word_tuple = get_random_word(session, 1782742233)
     # print(word_tuple, get_other_words(session, 1782742233, word_tuple[0]))
     # delete_word(session, 1782742233, 'собака')
-    print(if_cyrillic('привет'))
+    print(is_cyrillic('привет'))

@@ -124,6 +124,9 @@ def get_ru_word(message):
     cid = message.chat.id
     if message.text == Command.CANCEL:
         create_cards(message,1)
+    elif message.text == None:
+        bot.send_message(message.chat.id, f"Пустые значения запрещены!\nНапиши новое слово(ru):")
+        bot.register_next_step_handler(message, get_ru_word)
     elif xftgdb.is_cyrillic(message.text):
         target_word = xftgdb.translate_word(message.text, token=xftgdb.ya_token)
         markup = types.ReplyKeyboardMarkup(row_width=2)
@@ -148,10 +151,13 @@ def get_en_word(message, word, target_word):
     elif message.text == Command.YES:
         send_to_add_db(message, tid, word, target_word)
     else:
-        if xftgdb.is_english(message.text):
+        if message.text == None:
+            bot.send_message(message.chat.id, f"Пустые значения запрещены!\nВведите перевод для слова {word}:")
+            bot.register_next_step_handler(message, get_en_word, word, target_word)
+        elif xftgdb.is_english(message.text):
             send_to_add_db(message, tid, word, message.text)
         else:
-            bot.send_message(message.chat.id, f"Нужно написать английскими буквами\nПеревод для слова {word}:")
+            bot.send_message(message.chat.id, f"Нужно написать английскими буквами\nВведите перевод для слова {word}:")
             bot.register_next_step_handler(message, get_en_word, word, target_word)
 
 
@@ -187,4 +193,7 @@ def message_reply(message):
 
 bot.add_custom_filter(custom_filters.StateFilter(bot))
 
-bot.infinity_polling(skip_pending=True)
+try:
+    bot.infinity_polling(skip_pending=True)
+except Exception as e:
+    print(f"Error connecting to bot\n {e}")

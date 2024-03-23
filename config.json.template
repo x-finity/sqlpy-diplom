@@ -1,9 +1,10 @@
 {
     "bot_token": "",
     "database" : {
-        "user" : "",
+        "drivername" : "postgresql",
         "database" : "",
-        "password" : ""
+        "password" : "",
+        "username" : ""
     },
     "yandex_token" : ""
 }
