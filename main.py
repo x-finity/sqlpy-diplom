@@ -46,6 +46,7 @@ def show_target(data):
 
 
 class Command:
+    '''Class for buttons and reply messages'''
     ADD_WORD = 'Добавить слово ➕'
     DELETE_WORD = 'Удалить слово🔙'
     NEXT = 'Дальше ⏭'
@@ -53,10 +54,14 @@ class Command:
     YES = 'Да ✅'
 
 def show_hint(*lines):
+    '''Show hints, joining lines with '\n'''
     return '\n'.join(lines)
 
 @bot.message_handler(commands=['start'])
 def create_cards(message, step=0):
+    '''Create cards for user
+    step = 0 - for user who just started bot,
+    else step = 1'''
     cid = message.chat.id
     if cid not in known_users:
         xftgdb.add_new_user(session, cid)
@@ -102,10 +107,12 @@ def create_cards(message, step=0):
 
 @bot.message_handler(func=lambda message: message.text == Command.NEXT)
 def next_cards(message):
+    '''Handler for NEXT button'''
     create_cards(message, 1)
 
 @bot.message_handler(func=lambda message: message.text == Command.DELETE_WORD)
 def delete_word(message):
+    '''Handler for DELETE_WORD button'''
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         xftgdb.delete_word(session, message.from_user.id, data['translate_word'])
         bot.send_message(message.chat.id, f"Слово {data['translate_word']} удалено")
@@ -114,6 +121,7 @@ def delete_word(message):
 
 @bot.message_handler(func=lambda message: message.text == Command.ADD_WORD)
 def add_word(message):
+    '''Handler for ADD_WORD button'''
     cid = message.chat.id
     userStep[cid] = 1
     markup = types.ReplyKeyboardMarkup(row_width=1)
@@ -121,6 +129,7 @@ def add_word(message):
     bot.send_message(cid, "Напиши новое слово(ru):", reply_markup=markup)
     bot.register_next_step_handler(message, get_ru_word)
 def get_ru_word(message):
+    '''Get russian word from user'''
     cid = message.chat.id
     if message.text == Command.CANCEL:
         create_cards(message,1)
@@ -142,6 +151,7 @@ def get_ru_word(message):
         bot.register_next_step_handler(message, get_ru_word)
 
 def get_en_word(message, word, target_word):
+    '''Get english word from user'''
     def send_to_add_db(message, tid, word, target_word):
         add_word_to_db(tid, word, target_word)
         create_cards(message, 1)
@@ -163,6 +173,7 @@ def get_en_word(message, word, target_word):
 
 
 def add_word_to_db(tid, word, translate):
+    '''Add new word to user dictionary'''
     resp = xftgdb.add_new_word(session, tid, word, translate)
     if resp == 1:
         bot.send_message(tid, f"Слово {word} с переводом {translate} уже существует")
@@ -172,6 +183,7 @@ def add_word_to_db(tid, word, translate):
 
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def message_reply(message):
+    '''Handler for messages'''
     text = message.text
     markup = types.ReplyKeyboardMarkup(row_width=2)
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
